@@ -18,34 +18,30 @@ import ReorderingFeatures from '@/components/ReorderingFeatures';
 
 export default function ParallaxDeepSpaceLandingPage() {
   const [scrollY, setScrollY] = useState(0);
-  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [activeSection, setActiveSection] = useState('hero');
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const scrollYRef = useRef(0);
+  const mousePosRef = useRef({ x: 0, y: 0 });
 
-  // Smooth scroll listener via requestAnimationFrame
+  // Smooth scroll listener tracking target position
   useEffect(() => {
-    let ticking = false;
     const handleScroll = () => {
-      if (!ticking) {
-        window.requestAnimationFrame(() => {
-          setScrollY(window.scrollY);
-          ticking = false;
-        });
-        ticking = true;
-      }
+      scrollYRef.current = window.scrollY;
+      setScrollY(window.scrollY);
     };
 
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // Smooth mouse movement for 3D cursor parallax
+  // Smooth mouse movement tracking
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       const { innerWidth, innerHeight } = window;
-      const x = (e.clientX - innerWidth / 2) / (innerWidth / 2);
-      const y = (e.clientY - innerHeight / 2) / (innerHeight / 2);
-      setMousePos({ x, y });
+      mousePosRef.current = {
+        x: (e.clientX - innerWidth / 2) / (innerWidth / 2),
+        y: (e.clientY - innerHeight / 2) / (innerHeight / 2),
+      };
     };
 
     window.addEventListener('mousemove', handleMouseMove, { passive: true });
@@ -61,7 +57,7 @@ export default function ParallaxDeepSpaceLandingPage() {
     else setActiveSection('station-dock');
   }, [scrollY]);
 
-  // Deep Starfield Canvas animation (Layer 0 & 1)
+  // Deep Starfield Canvas animation with Large Front Stars & Buttery LERP Smooth Scrolling
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -79,60 +75,157 @@ export default function ParallaxDeepSpaceLandingPage() {
     };
     window.addEventListener('resize', handleResize);
 
-    // Create 180 stars with different depths (z: 1 to 4)
-    const stars = Array.from({ length: 180 }, () => ({
-      x: Math.random() * width,
-      y: Math.random() * height * 4,
-      z: Math.random() * 3 + 0.6,
-      radius: Math.random() * 1.3 + 0.3,
-      alpha: Math.random() * 0.7 + 0.2,
-      twinkleSpeed: Math.random() * 0.02 + 0.005,
-      twinkleOffset: Math.random() * Math.PI * 2,
-    }));
+    // Multi-tier Starfield System (Bigger foreground stars + luminous halos)
+    interface Star {
+      x: number;
+      y: number;
+      z: number;
+      radius: number;
+      alpha: number;
+      twinkleSpeed: number;
+      twinkleOffset: number;
+      isFrontStar: boolean;
+      hasSpikes: boolean;
+      color: string;
+      haloColor: string;
+    }
+
+    const starColors = [
+      { core: '#FFFFFF', halo: 'rgba(255, 255, 255, 0.4)' },
+      { core: '#E0F2FE', halo: 'rgba(56, 189, 248, 0.45)' }, // Electric Cyan
+      { core: '#FEF08A', halo: 'rgba(251, 191, 36, 0.4)' },  // Warm Starlight Gold
+      { core: '#DDD6FE', halo: 'rgba(192, 132, 252, 0.35)' }, // Radiant Violet
+    ];
+
+    const TOTAL_STARS = 220;
+    const stars: Star[] = Array.from({ length: TOTAL_STARS }, (_, i) => {
+      // 25% of stars are prominent, larger front stars
+      const isFront = i < 48;
+      const palette = starColors[Math.floor(Math.random() * starColors.length)];
+
+      if (isFront) {
+        return {
+          x: Math.random() * width,
+          y: Math.random() * height * 4,
+          z: Math.random() * 2.2 + 3.2, // Front plane (z: 3.2 - 5.4)
+          radius: Math.random() * 2.2 + 2.8, // BIGGER front stars: 2.8px to 5.0px
+          alpha: Math.random() * 0.25 + 0.75,
+          twinkleSpeed: Math.random() * 0.015 + 0.008,
+          twinkleOffset: Math.random() * Math.PI * 2,
+          isFrontStar: true,
+          hasSpikes: i < 18, // Top focal stars get 4-point diffraction spikes
+          color: palette.core,
+          haloColor: palette.halo,
+        };
+      } else {
+        // Midground & background ambient stars
+        const isMid = i < 130;
+        return {
+          x: Math.random() * width,
+          y: Math.random() * height * 4,
+          z: isMid ? Math.random() * 1.5 + 1.6 : Math.random() * 1.0 + 0.6,
+          radius: isMid ? Math.random() * 1.4 + 1.4 : Math.random() * 0.8 + 0.6,
+          alpha: isMid ? Math.random() * 0.4 + 0.45 : Math.random() * 0.3 + 0.25,
+          twinkleSpeed: Math.random() * 0.02 + 0.005,
+          twinkleOffset: Math.random() * Math.PI * 2,
+          isFrontStar: false,
+          hasSpikes: false,
+          color: palette.core,
+          haloColor: palette.halo,
+        };
+      }
+    });
 
     let frame = 0;
+    let smoothScrollY = scrollYRef.current;
+    let smoothMouseX = 0;
+    let smoothMouseY = 0;
+
     const render = () => {
       frame++;
+
+      // SILKY SMOOTH LERP INTERPOLATION ON SCROLL
+      // Interpolates smoothly toward target with continuous deceleration
+      smoothScrollY += (scrollYRef.current - smoothScrollY) * 0.08;
+      smoothMouseX += (mousePosRef.current.x - smoothMouseX) * 0.06;
+      smoothMouseY += (mousePosRef.current.y - smoothMouseY) * 0.06;
+
       ctx.clearRect(0, 0, width, height);
 
-      // Deep pure space clear
+      // Deep Space background
       ctx.fillStyle = '#020306';
       ctx.fillRect(0, 0, width, height);
 
-      // Draw each star with its parallax speed
-      stars.forEach((star) => {
-        // Multi-depth parallax calculation for starfield
-        const starParallaxSpeed = 0.06 * star.z;
-        const screenY = (star.y - scrollY * starParallaxSpeed) % (height * 3);
-        const wrappedY = screenY < 0 ? screenY + height * 3 : screenY;
+      // Render stars with depth-based parallax and luminous halos
+      for (let i = 0; i < stars.length; i++) {
+        const star = stars[i];
 
-        // Only draw if within visible viewport
-        if (wrappedY >= -10 && wrappedY <= height + 10) {
-          const mouseShiftX = mousePos.x * (star.z * 6);
-          const mouseShiftY = mousePos.y * (star.z * 6);
+        // Multi-depth parallax velocity: front stars travel faster in foreground
+        const starParallaxSpeed = 0.08 * star.z;
+        const totalHeight = height * 4;
+        const screenY = (star.y - smoothScrollY * starParallaxSpeed) % totalHeight;
+        const wrappedY = screenY < 0 ? screenY + totalHeight : screenY;
 
-          const brightness =
-            star.alpha + Math.sin(frame * star.twinkleSpeed + star.twinkleOffset) * 0.25;
-          const clampedBrightness = Math.max(0.1, Math.min(1, brightness));
+        // Viewport culling buffer
+        if (wrappedY >= -30 && wrappedY <= height + 30) {
+          const mouseShiftX = smoothMouseX * (star.z * 7);
+          const mouseShiftY = smoothMouseY * (star.z * 7);
 
+          const posX = star.x + mouseShiftX;
+          const posY = wrappedY + mouseShiftY;
+
+          // Twinkle pulse
+          const pulse = Math.sin(frame * star.twinkleSpeed + star.twinkleOffset);
+          const brightness = Math.max(0.15, Math.min(1, star.alpha + pulse * 0.2));
+
+          // Draw front star glowing halo
+          if (star.isFrontStar) {
+            const haloRadius = star.radius * 3.6;
+            const gradient = ctx.createRadialGradient(
+              posX,
+              posY,
+              star.radius * 0.4,
+              posX,
+              posY,
+              haloRadius
+            );
+            gradient.addColorStop(0, star.haloColor);
+            gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+            ctx.beginPath();
+            ctx.arc(posX, posY, haloRadius, 0, Math.PI * 2);
+            ctx.fillStyle = gradient;
+            ctx.globalAlpha = brightness * 0.85;
+            ctx.fill();
+
+            // Subtle 4-point cross diffraction spikes on brightest stars
+            if (star.hasSpikes && brightness > 0.6) {
+              const spikeLen = star.radius * 4.2;
+              ctx.lineWidth = 1;
+              ctx.strokeStyle = star.color;
+              ctx.globalAlpha = (brightness - 0.5) * 0.5;
+
+              ctx.beginPath();
+              // Horizontal spike
+              ctx.moveTo(posX - spikeLen, posY);
+              ctx.lineTo(posX + spikeLen, posY);
+              // Vertical spike
+              ctx.moveTo(posX, posY - spikeLen);
+              ctx.lineTo(posX, posY + spikeLen);
+              ctx.stroke();
+            }
+          }
+
+          // Draw main star core
           ctx.beginPath();
-          ctx.arc(
-            star.x + mouseShiftX,
-            wrappedY + mouseShiftY,
-            star.radius,
-            0,
-            Math.PI * 2
-          );
-          ctx.fillStyle =
-            star.z > 2.5
-              ? `rgba(224, 242, 254, ${clampedBrightness})`
-              : star.z > 1.5
-              ? `rgba(203, 213, 225, ${clampedBrightness * 0.8})`
-              : `rgba(148, 163, 184, ${clampedBrightness * 0.5})`;
+          ctx.arc(posX, posY, star.radius, 0, Math.PI * 2);
+          ctx.fillStyle = star.color;
+          ctx.globalAlpha = brightness;
           ctx.fill();
         }
-      });
+      }
 
+      ctx.globalAlpha = 1;
       animationId = requestAnimationFrame(render);
     };
 
@@ -142,7 +235,7 @@ export default function ParallaxDeepSpaceLandingPage() {
       window.removeEventListener('resize', handleResize);
       cancelAnimationFrame(animationId);
     };
-  }, [scrollY, mousePos]);
+  }, []);
 
   return (
     <div
